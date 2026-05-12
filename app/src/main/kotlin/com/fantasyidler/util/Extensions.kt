@@ -18,8 +18,8 @@ fun Long.formatCoins(): String = when {
  * Convert an epoch-ms "ends_at" timestamp to a human-readable countdown string.
  * e.g. "42m 10s" or "Complete"
  */
-fun Long.toCountdown(): String {
-    val remaining = this - System.currentTimeMillis()
+fun Long.toCountdown(nowMs: Long = System.currentTimeMillis()): String {
+    val remaining = this - nowMs
     if (remaining <= 0) return "Complete"
     val totalSeconds = remaining / 1_000
     val minutes = totalSeconds / 60

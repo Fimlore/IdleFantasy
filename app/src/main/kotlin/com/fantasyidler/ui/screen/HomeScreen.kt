@@ -333,17 +333,18 @@ private fun HomeSessionCard(
         now = System.currentTimeMillis()
     }
 
-    val isDone = session.completed || now >= endsAt
-    val actualCombatEndsAt = remember(session.sessionId, session.skillName, session.frames, session.startedAt, session.endsAt) {
-        if (session.skillName != "combat") return@remember null
+    val actualEndsAt = remember(session.sessionId, session.skillName, session.frames, session.startedAt, session.endsAt) {
+        if (session.skillName != "combat") return@remember session.endsAt
         val frames = runCatching { Json.decodeFromString<List<SessionFrame>>(session.frames) }
             .getOrElse { emptyList() }
-        if (frames.isEmpty()) return@remember null
+        if (frames.isEmpty()) return@remember session.endsAt
         val fullDurationMs = (session.endsAt - session.startedAt).coerceAtLeast(1L)
         val perFrameMs = (fullDurationMs / 60L).coerceAtLeast(1L)
         val actualFrames = frames.size.coerceAtMost(60)
         session.startedAt + perFrameMs * actualFrames
     }
+    val completionAt = if (session.skillName == "combat") minOf(endsAt, actualEndsAt) else endsAt
+    val isDone = session.completed || now >= completionAt
 
     val skillLabel = when (session.skillName) {
         "combat" -> context.getString(R.string.label_combat)
@@ -384,15 +385,24 @@ private fun HomeSessionCard(
             if (!isDone) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text  = remember(now) { endsAt.toCountdown() },
+                    text  = remember(now) { endsAt.toCountdown(now) },
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
-                if (BuildConfig.DEBUG && actualCombatEndsAt != null) {
+                if (BuildConfig.DEBUG) {
                     Spacer(Modifier.height(2.dp))
+                    val actualLabel = remember(now, actualEndsAt) {
+                        val remainingMs = actualEndsAt - now
+                        if (remainingMs > 0L) {
+                            "Actual remaining: ${actualEndsAt.toCountdown(now)}"
+                        } else {
+                            val secondsAgo = ((-remainingMs) / 1_000L).coerceAtLeast(0L)
+                            "Actual ended: ${secondsAgo}s ago"
+                        }
+                    }
                     Text(
-                        text  = remember(now, actualCombatEndsAt) { "Actual remaining: ${actualCombatEndsAt.toCountdown()}" },
+                        text  = actualLabel,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
                     )

@@ -343,7 +343,7 @@ private fun ActiveSessionBanner(
             Spacer(Modifier.height(8.dp))
             if (!completed) {
                 Text(
-                    text  = remember(now) { endsAt.toCountdown() },
+                    text  = remember(now) { endsAt.toCountdown(now) },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )

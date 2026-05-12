@@ -102,7 +102,8 @@ class HomeViewModel @Inject constructor(
     fun collectSession() {
         viewModelScope.launch {
             val latest = sessionRepo.getActiveSession() ?: return@launch
-            if (!latest.completed && System.currentTimeMillis() < latest.endsAt) return@launch
+            val now = System.currentTimeMillis()
+            if (!latest.completed && now < effectiveSessionEndsAt(latest)) return@launch
             // If timed out but alarm hasn't fired yet, mark completed so it shows up in the query
             if (!latest.completed) sessionRepo.markCompleted(latest.sessionId)
 
@@ -311,6 +312,18 @@ class HomeViewModel @Inject constructor(
 
     fun summaryConsumed() = _extra.update { it.copy(sessionSummary = null) }
     fun snackbarConsumed() = _extra.update { it.copy(snackbarMessage = null) }
+
+    private fun effectiveSessionEndsAt(session: SkillSession): Long {
+        if (session.skillName != "combat") return session.endsAt
+        val frames = runCatching { json.decodeFromString<List<SessionFrame>>(session.frames) }
+            .getOrElse { emptyList() }
+        if (frames.isEmpty()) return session.endsAt
+        val fullDurationMs = (session.endsAt - session.startedAt).coerceAtLeast(1L)
+        val perFrameMs = (fullDurationMs / 60L).coerceAtLeast(1L)
+        val actualFrames = (frames.maxOfOrNull { it.minute } ?: frames.size).coerceIn(1, 60)
+        val actualEndsAt = session.startedAt + perFrameMs * actualFrames
+        return minOf(session.endsAt, actualEndsAt)
+    }
 }
 
 // ---------------------------------------------------------------------------

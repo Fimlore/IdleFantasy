@@ -489,7 +489,8 @@ class SkillsViewModel @Inject constructor(
     fun collectSession() {
         viewModelScope.launch {
             val session = sessionRepo.getActiveSession() ?: return@launch
-            if (!session.completed && System.currentTimeMillis() < session.endsAt) return@launch
+            val now = System.currentTimeMillis()
+            if (!session.completed && now < effectiveSessionEndsAt(session)) return@launch
 
             val frames: List<com.fantasyidler.data.model.SessionFrame> =
                 json.decodeFromString(session.frames)
@@ -568,6 +569,18 @@ class SkillsViewModel @Inject constructor(
     }
 
     fun snackbarConsumed() = _uiState.update { it.copy(snackbarMessage = null) }
+
+    private fun effectiveSessionEndsAt(session: SkillSession): Long {
+        if (session.skillName != "combat") return session.endsAt
+        val frames = runCatching { json.decodeFromString<List<SessionFrame>>(session.frames) }
+            .getOrElse { emptyList() }
+        if (frames.isEmpty()) return session.endsAt
+        val fullDurationMs = (session.endsAt - session.startedAt).coerceAtLeast(1L)
+        val perFrameMs = (fullDurationMs / 60L).coerceAtLeast(1L)
+        val actualFrames = (frames.maxOfOrNull { it.minute } ?: frames.size).coerceIn(1, 60)
+        val actualEndsAt = session.startedAt + perFrameMs * actualFrames
+        return minOf(session.endsAt, actualEndsAt)
+    }
 
     // ------------------------------------------------------------------
     // Helpers
